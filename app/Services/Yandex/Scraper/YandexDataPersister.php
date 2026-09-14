@@ -55,7 +55,6 @@ class YandexDataPersister
         Organization $organization,
         array $data
     ): void {
-        /** @var Review $review */
         $review = Review::updateOrCreate(
             [
                 'organization_id' => $organization->id,

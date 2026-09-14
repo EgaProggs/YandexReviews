@@ -86,6 +86,10 @@ class YandexScraper
             $pageSize
         );
 
+        if(isset(json_decode($response->body())->csrfToken)){
+            $this->context->session['csrfToken'] = json_decode($response->body())->csrfToken;
+            return $this->scrapeReviewsPage($businessId, $page, $pageSize);
+        }
 
         return $this->parseReviewsResponse(
             $response,
@@ -117,7 +121,7 @@ class YandexScraper
                 $pageSize
             );
        
-
+            
             /*
              * Yandex может вернуть error.code = 500
              * после последней доступной страницы.

@@ -172,6 +172,8 @@ class YandexParser
 
         $params = $data['params'] ?? null;
 
+
+        
         if ($rawReviews === null && $params === null) {
             throw new YandexParserException(
                 'В ответе Yandex Maps отсутствуют отзывы и параметры пагинации.'

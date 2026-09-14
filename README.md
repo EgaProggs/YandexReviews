@@ -1,58 +1,680 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Yandex Reviews Parser
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Тестовое приложение для интеграции с Яндекс.Картами: авторизация, подключение организации по ссылке, получение данных карточки и отзывов и отображение их в SPA-интерфейсе.
 
-## About Laravel
+> **Статус проекта: рабочий прототип, но не финальная production-реализация.**
+>
+> Основной сценарий приложения реализован и развёрнут на сервере. При этом часть требований тестового задания не успел реализовать полностью. В README явно отмечено, что именно реализовано, а что осталось на уровне архитектурного решения.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Демо
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Рабочий прототип:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+**http://199.83.103.154:8080/organizations**
 
-## Learning Laravel
+## Стек
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- Laravel — backend / REST API
+- Vue 3 — frontend SPA
+- Composition API
+- Laravel Sanctum — SPA-аутентификация
+- MySQL 8.4
+- Redis
+- Laravel Queue
+- Nginx
+- Docker Compose
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+# 1. Авторизация
 
-## Agentic Development
+Реализована авторизация пользователя по логину и паролю.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Регистрация не предусмотрена, используется seed-пользователь.
 
-```bash
-composer require laravel/boost --dev
+Для SPA-аутентификации используется Laravel Sanctum с cookie/session-based авторизацией.
 
-php artisan boost:install
+Сессии хранятся в MySQL.
+
+**Статус: реализовано.**
+
+---
+
+# 2. Страница настроек организации
+
+Пользователь может указать ссылку на карточку организации в Яндекс.Картах.
+
+После отправки:
+
+1. ссылка валидируется;
+2. определяется организация;
+3. данные организации сохраняются в БД;
+4. запускается получение отзывов через очередь.
+
+Логика работы с Яндексом вынесена из контроллеров в отдельные сервисы.
+
+**Статус: реализовано.**
+
+---
+
+# 3. Получение данных организации
+
+Получаются:
+
+- средний рейтинг;
+- количество оценок;
+- количество отзывов;
+- отзывы организации.
+
+Каждый отзыв содержит:
+
+- автора;
+- дату;
+- текст;
+- оценку.
+
+Отзывы обрабатываются страницами по 50 записей.
+
+**Статус: реализовано.**
+
+---
+
+# 4. Получение всех доступных отзывов
+
+Яндекс загружает отзывы динамически и не отдаёт весь список одной HTML-страницей.
+
+Вместо попытки парсить HTML выбран разбор внутренних JSON-запросов, используемых интерфейсом Яндекс.Карт.
+
+Парсер последовательно получает страницы отзывов и объединяет результаты.
+
+Предусмотрена обработка пагинации и ограничение максимального количества страниц через конфигурацию.
+
+**Статус: реализовано частично.**
+
+Основная логика получения нескольких страниц реализована, однако production-оптимизация загрузки большого количества отзывов ещё не завершена.
+
+---
+
+# 5. Постраничная навигация
+
+На frontend предусмотрено отображение отзывов страницами по 50 записей.
+
+Переключение страниц выполняется без полной перезагрузки SPA.
+
+При этом выбранная архитектура предусматривает получение и сохранение результатов парсинга на backend, а не повторный запрос к Яндексу при каждом переключении страницы пользователем.
+
+**Статус: реализовано частично.**
+
+Полностью оптимизированная схема предварительной подгрузки следующих страниц отзывов ещё не реализована.
+
+В частности, **преждевременная (prefetch) подгрузка следующих страниц** не была завершена в рамках тестового задания.
+
+---
+
+# 6. Почему выбран парсинг внутренних JSON-запросов
+
+Было рассмотрено два основных подхода.
+
+### Вариант 1 — headless browser
+
+Запуск Chromium/Playwright/Puppeteer и имитация действий пользователя:
+
+```text
+Browser
+  ↓
+Yandex Maps
+  ↓
+JS execution
+  ↓
+Scroll
+  ↓
+Network requests
+  ↓
+Reviews
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+### Вариант 2 — разбор внутренних HTTP/JSON-запросов
 
-## Contributing
+```text
+HTTP client
+  ↓
+Yandex session
+  ↓
+Internal JSON endpoint
+  ↓
+JSON
+  ↓
+Parser
+  ↓
+Reviews
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Для тестового задания выбран второй вариант.
 
-## Code of Conduct
+### Плюсы
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- значительно меньше потребление памяти;
+- выше скорость;
+- не требуется Chromium;
+- проще масштабировать;
+- проще запускать в Docker;
+- непосредственно получаются структурированные данные.
 
-## Security Vulnerabilities
+### Минусы
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- внутренние endpoint'ы Яндекса не являются стабильным публичным API;
+- могут измениться параметры запросов;
+- могут измениться CSRF/session-механизмы;
+- может измениться формат JSON;
+- существует риск блокировки.
 
-## License
+### Почему не headless
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Headless-браузер лучше имитирует реального пользователя, но для сервиса, который должен регулярно обрабатывать десятки организаций, это значительно более тяжёлый вариант.
+
+Для production-версии разумно иметь оба механизма: основной HTTP-парсер и fallback через headless browser.
+
+**Статус: подход реализован.**
+
+---
+
+# 7. Устойчивость к изменению разметки и API
+
+Яндекс регулярно меняет frontend и внутренние запросы.
+
+Поэтому задача парсера — не просто получить какой-либо JSON, а проверить, что его структура соответствует ожидаемой.
+
+В `YandexParser` предусмотрены проверки:
+
+- наличие ожидаемой структуры ответа;
+- наличие `data`;
+- наличие списка отзывов / параметров;
+- корректность типа полученных данных;
+- корректность HTTP-ответа;
+- обработка `error` от Яндекса.
+
+При нарушении ожидаемой структуры выбрасывается `YandexParserException`.
+
+Таким образом, изменение API не должно приводить к ситуации, когда приложение молча сохраняет пустые или повреждённые данные.
+
+Пример логики:
+
+```text
+HTTP 200
+   ↓
+JSON
+   ↓
+Проверка структуры
+   ↓
+OK → parse
+   ↓
+Ошибка структуры → YandexParserException
+```
+
+**Статус: реализовано базовое обнаружение поломки.**
+
+Более развитый механизм мониторинга изменения схемы ответа, метрик и автоматических алертов ещё не реализован.
+
+---
+
+# 8. Обработка ошибок
+
+Предусмотрена обработка нескольких классов ошибок:
+
+- HTTP-ошибка Яндекса;
+- некорректный JSON;
+- неожиданная структура JSON;
+- отсутствие отзывов и параметров;
+- ошибка внутреннего API Яндекса;
+- ошибка БД;
+- ошибки фоновых Jobs.
+
+Ошибки парсера не должны превращаться в успешный результат с пустыми данными.
+
+Для фоновых задач используется Laravel Queue.
+
+**Статус: реализовано.**
+
+---
+
+# 9. Фоновая обработка
+
+Парсинг отзывов не выполняется непосредственно внутри HTTP-запроса пользователя.
+
+Используется Laravel Queue + Redis.
+
+Основная задача:
+
+```text
+ParseOrganizationReviewsJob
+```
+
+Схема:
+
+```text
+Frontend
+   ↓
+API
+   ↓
+Создание/обновление организации
+   ↓
+Queue Job
+   ↓
+Redis
+   ↓
+YandexScraper
+   ↓
+YandexDataPersister
+   ↓
+MySQL
+```
+
+Это позволяет не удерживать HTTP-соединение пользователя во время длительного парсинга.
+
+Для Job предусмотрены повторные попытки.
+
+**Статус: реализовано.**
+
+---
+
+# 10. Прогресс парсинга
+
+Архитектура с Queue позволяет отслеживать состояние фоновой задачи отдельно от HTTP-запроса.
+
+Однако полноценный пользовательский progress bar с детальным отображением:
+
+```text
+37 / 600 отзывов
+страница 4 / 12
+```
+
+ещё не реализован.
+
+В текущем прототипе основная индикация выполняется через состояние фоновой задачи и результаты парсинга.
+
+**Статус: реализовано частично.**
+
+---
+
+# 11. Анти-бан
+
+При обращении к Яндексу учитываются ограничения внешнего источника.
+
+В парсере предусмотрены:
+
+- паузы между запросами;
+- ограничение количества страниц;
+- повторные попытки Job;
+- использование User-Agent;
+- сохранение session/context;
+- обработка ошибок внешнего источника.
+
+В дальнейшем для production-системы с большим количеством организаций необходимо добавить:
+
+- централизованный rate limiter;
+- exponential backoff;
+- распределение запросов;
+- пул прокси;
+- ротацию User-Agent;
+- отдельную обработку HTTP 403/429;
+- временную блокировку проблемного proxy;
+- circuit breaker.
+
+**Статус: базовая реализация есть, полноценная production-защита не завершена.**
+
+---
+
+# 12. Масштабирование на ~50 филиалов
+
+Для 50 организаций по ~600 отзывов синхронный HTTP-парсинг был бы неправильным решением.
+
+Поэтому используется очередь:
+
+```text
+Organization #1 → Job
+Organization #2 → Job
+Organization #3 → Job
+...
+Organization #50 → Job
+```
+
+Redis используется как backend очереди.
+
+Это позволяет независимо обрабатывать организации и повторять только упавшие задачи.
+
+Для дальнейшего масштабирования можно запускать несколько queue workers.
+
+**Статус: базовая архитектура реализована.**
+
+Детальное распределение нагрузки между несколькими workers и продвинутая система мониторинга очереди не реализованы.
+
+---
+
+# 13. Идемпотентность
+
+При повторном парсинге необходимо избегать создания дублей отзывов.
+
+Для этого отзывы должны идентифицироваться по стабильному идентификатору источника и организации.
+
+Предусмотренная модель предполагает:
+
+```text
+Organization
+    ↓
+Reviews
+    ↓
+Yandex review ID
+```
+
+Повторный парсинг должен обновлять существующий отзыв вместо создания новой записи.
+
+**Статус: базовая модель реализована / production-механизм истории ещё не завершён.**
+
+---
+
+# 14. История изменений
+
+В полном production-варианте целесообразно хранить снимки результатов каждого парсинга:
+
+```text
+organization_snapshots
+
+id
+organization_id
+rating
+ratings_count
+reviews_count
+created_at
+```
+
+и отдельно:
+
+```text
+review_snapshots
+
+id
+review_id
+rating
+text
+author
+created_at
+snapshot_id
+```
+
+Это позволит сравнивать:
+
+```text
+Было:
+rating = 4.3
+reviews = 512
+
+Стало:
+rating = 4.4
+reviews = 526
+```
+
+и определять изменения отзывов.
+
+**Статус: не реализовано полностью.**
+
+В рамках тестового задания приоритет был отдан рабочему получению и отображению актуальных данных.
+
+---
+
+# 15. База данных
+
+Используется MySQL.
+
+Структура БД создаётся через Laravel migrations.
+
+Основные сущности:
+
+```text
+users
+organizations
+reviews
+jobs
+failed_jobs
+sessions
+```
+
+Queue и session storage также используют инфраструктуру Docker.
+
+Подключение к БД осуществляется через переменные окружения.
+
+**Статус: реализовано.**
+
+---
+
+# 16. Frontend
+
+Frontend реализован на Vue 3.
+
+Используется Composition API.
+
+SPA взаимодействует с Laravel API без полной перезагрузки страницы.
+
+Предусмотрены состояния:
+
+- загрузка;
+- ошибка;
+- успешная загрузка;
+- отображение данных;
+- постраничный просмотр отзывов.
+
+**Статус: реализовано.**
+
+---
+
+# 17. Docker
+
+Проект запускается через Docker Compose.
+
+Используются отдельные контейнеры:
+
+```text
+nginx
+app
+queue
+mysql
+redis
+```
+
+Архитектура:
+
+```text
+                 ┌─────────────┐
+                 │    Nginx    │
+                 └──────┬──────┘
+                        │
+                        ↓
+                 ┌─────────────┐
+                 │ Laravel App │
+                 └──────┬──────┘
+                        │
+              ┌─────────┴─────────┐
+              ↓                   ↓
+          ┌────────┐         ┌────────┐
+          │ MySQL  │         │ Redis  │
+          └────────┘         └───┬────┘
+                                 │
+                                 ↓
+                           ┌───────────┐
+                           │   Queue   │
+                           └───────────┘
+```
+
+---
+
+# 18. Запуск локально
+
+Требования:
+
+- Docker
+- Docker Compose
+
+Клонировать проект:
+
+```bash
+git clone <repository-url>
+cd <project-directory>
+```
+
+Создать `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Проверить настройки подключения к БД и Redis.
+
+Основные значения для Docker:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=mysql
+DB_PORT=3306
+DB_DATABASE=yandex_reviews
+DB_USERNAME=...
+DB_PASSWORD=...
+
+REDIS_HOST=redis
+```
+
+Запустить контейнеры:
+
+```bash
+docker compose up -d --build
+```
+
+Проверить состояние:
+
+```bash
+docker compose ps
+```
+
+После сборки приложение должно иметь следующие сервисы:
+
+```text
+yandex_reviews_app
+yandex_reviews_queue
+yandex_reviews_nginx
+yandex_reviews_mysql
+yandex_reviews_redis
+```
+
+В случае первого запуска необходимо выполнить миграции и сидирование:
+
+```bash
+docker compose exec app php artisan migrate --seed
+```
+
+После этого приложение доступно на:
+
+```text
+http://localhost:8080
+```
+
+---
+
+# 19. Переменные окружения
+
+Основные переменные:
+
+```env
+APP_NAME=
+APP_ENV=
+APP_KEY=
+APP_DEBUG=
+
+DB_CONNECTION=mysql
+DB_HOST=mysql
+DB_PORT=3306
+DB_DATABASE=
+DB_USERNAME=
+DB_PASSWORD=
+
+SESSION_DRIVER=database
+
+CACHE_STORE=redis
+
+QUEUE_CONNECTION=redis
+
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
+
+Для production необходимо использовать собственные безопасные значения паролей и `APP_KEY`.
+
+---
+
+# 20. Работа Queue
+
+Queue worker запускается отдельным Docker Compose сервисом.
+
+Проверить его состояние:
+
+```bash
+docker compose ps
+```
+
+Посмотреть логи:
+
+```bash
+docker compose logs -f queue
+```
+
+При ошибке конкретного Job полезно посмотреть:
+
+```bash
+docker compose exec app php artisan queue:failed
+```
+
+Повторить неудачные задачи:
+
+```bash
+docker compose exec app php artisan queue:retry all
+```
+
+---
+
+# 21. Что было бы сделано при наличии большего времени
+
+Основные следующие шаги:
+
+1. Полностью реализовать prefetch следующих страниц отзывов.
+2. Добавить детальный progress tracking для Queue Job.
+3. Реализовать полноценную историю изменений организации и отзывов.
+4. Добавить rate limiting и exponential backoff.
+5. Добавить пул и ротацию proxy.
+6. Добавить обработку 403/429 и автоматическое исключение заблокированных proxy.
+7. Добавить fallback через headless browser.
+8. Добавить мониторинг очередей и парсера.
+9. Добавить автоматические тесты для различных форматов ответов Яндекса.
+10. Добавить контроль версий схемы внутренних JSON-ответов.
+11. Добавить кэширование и более агрессивную оптимизацию повторных парсингов.
+12. Улучшить frontend-индикацию процесса фонового обновления.
+
+---
+
+# 22. Заключение
+
+Проект представляет собой **рабочий прототип**, демонстрирующий основной сценарий интеграции с Яндекс.Картами без официального API.
+
+Основной технический акцент сделан на:
+
+- выделении парсинга в отдельные сервисы;
+- работе с внутренними JSON-запросами Яндекса;
+- валидации структуры внешнего ответа;
+- обработке ошибок;
+- фоновой обработке через Redis + Laravel Queue;
+- хранении данных в MySQL;
+- SPA-взаимодействии через Vue 3.
+
+При этом проект сознательно не позиционируется как полностью production-ready решение. Не успели завершить прежде всего **prefetch страниц отзывов, полноценный progress tracking, историю изменений, расширенный anti-ban и fallback через headless browser**.
+
+Для тестового задания выбран приоритет: сначала получить рабочий end-to-end прототип с реальным парсингом Яндекс.Карт и фоновой обработкой, а затем уже расширять его production-механизмами.
+
+## Демо
+
+**http://199.83.103.154:8080/organizations**
